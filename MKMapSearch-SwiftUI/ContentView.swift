@@ -11,7 +11,7 @@ import Combine
 import MapKit
 
 final class Model: ObservableObject {
-  @Published var items: [MKMapItem] = []
+  @Published private (set) var items: [MKMapItem] = []
   @Published var selectedItems: Set<MKMapItem> = []
   let term = CurrentValueSubject<String, Never>("")
   private var subscriptions: Set<AnyCancellable> = []
@@ -23,20 +23,17 @@ final class Model: ObservableObject {
         guard !term.isEmpty else {
           return Just([]).eraseToAnyPublisher()
         }
-        return Future<[MKMapItem], Error> { promise in
+        return Future<[MKMapItem], Never> { promise in
           let searchRequest = MKLocalSearch.Request()
           searchRequest.naturalLanguageQuery = term
-          MKLocalSearch(request: searchRequest).start { response, error in
-            promise(
-              error.map {.failure($0)} ??
-                .success(response?.mapItems ?? [])
-            )
+          MKLocalSearch(request: searchRequest).start { response, _ in
+            promise(.success(response?.mapItems ?? []))
           }
         }
-        .replaceError(with: [])
         .eraseToAnyPublisher()
     }
     .switchToLatest()
+    .receive(on: RunLoop.main)
     .assign(to: \.items, on: self)
     .store(in: &subscriptions)
 
